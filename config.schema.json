@@ -33,6 +33,14 @@
               "format": "uri",
               "description": "Video stream URL, e.g. rtsp://username:password@camera-host:8554/ch2"
             },
+            "checkInterval": {
+              "title": "Check interval (seconds)",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600,
+              "default": 2,
+              "description": "Seconds between detection checks for all sensors on this stream. Defaults to 2. Lower values respond sooner and use more CPU. Checks may take longer if inference is slow."
+            },
             "sensors": {
               "title": "Sensors",
               "type": "array",
@@ -87,6 +95,7 @@
       "items": [
         { "key": "streams[].name", "title": "🏷️ Stream name", "placeholder": "Garden" },
         { "key": "streams[].url", "title": "🔗 Stream URL", "placeholder": "rtsp://user:pass@192.168.1.50:8554/ch2" },
+        { "key": "streams[].checkInterval", "type": "number", "title": "Check interval (seconds)", "placeholder": "2" },
         {
           "key": "streams[].sensors",
           "type": "array",

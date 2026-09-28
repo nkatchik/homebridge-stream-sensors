@@ -7,7 +7,13 @@ import {
   Service,
   Characteristic,
 } from 'homebridge';
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+import {
+  PLATFORM_NAME,
+  PLUGIN_NAME,
+  SAMPLE_MS,
+  CHECK_INTERVAL_MIN,
+  CHECK_INTERVAL_MAX,
+} from './settings.js';
 import { StreamSensorAccessory } from './accessory.js';
 import { StreamWorker } from './stream.js';
 import { loadModel, closeModel, runInference } from './inference.js';
@@ -109,6 +115,19 @@ export class StreamSensorsPlatform implements DynamicPlatformPlugin {
         continue;
       }
 
+      let checkInterval = stream.checkInterval ?? SAMPLE_MS / 1_000;
+      if (
+        !Number.isInteger(checkInterval) ||
+        checkInterval < CHECK_INTERVAL_MIN ||
+        checkInterval > CHECK_INTERVAL_MAX
+      ) {
+        this.log.warn(
+          `Stream "${streamName}" checkInterval "${checkInterval}" must be a whole number ` +
+            `from ${CHECK_INTERVAL_MIN} to ${CHECK_INTERVAL_MAX} seconds; using ${SAMPLE_MS / 1_000}`,
+        );
+        checkInterval = SAMPLE_MS / 1_000;
+      }
+
       const sensorAccessories: StreamSensorAccessory[] = sensors.map((sensor) => {
         const uuid = this.api.hap.uuid.generate(sensor.name);
         seenUUIDs.add(uuid);
@@ -137,6 +156,7 @@ export class StreamSensorsPlatform implements DynamicPlatformPlugin {
         (health) => sensorAccessories.forEach((a) => a.setHealth(health)),
         (frame) => runInference(frame),
         this.log,
+        checkInterval * 1_000,
       );
       worker.start();
       this.workers.push(worker);

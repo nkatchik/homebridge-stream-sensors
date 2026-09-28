@@ -5,6 +5,7 @@ const workerInstances: Array<{
   url: string;
   name: string;
   sensors: unknown[];
+  checkIntervalMs: number;
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
   waitForStop: ReturnType<typeof vi.fn>;
@@ -15,10 +16,16 @@ vi.mock('../src/stream.js', () => ({
     url: string,
     name: string,
     sensors: unknown[],
+    _onSensorState: unknown,
+    _onHealth: unknown,
+    _infer: unknown,
+    _log: unknown,
+    checkIntervalMs: number,
   ) {
     this.url = url;
     this.name = name;
     this.sensors = sensors;
+    this.checkIntervalMs = checkIntervalMs;
     this.start = vi.fn();
     this.stop = vi.fn();
     this.waitForStop = vi.fn().mockResolvedValue(undefined);
@@ -143,7 +150,59 @@ describe('discoverDevices()', () => {
     expect(workerInstances[0].name).toBe('Garden');
     expect(workerInstances[0].sensors).toHaveLength(2);
     expect(workerInstances[0].start).toHaveBeenCalled();
+    expect(workerInstances[0].checkIntervalMs).toBe(2_000);
   });
+
+  it('passes each stream its own check interval in milliseconds', async () => {
+    const { api, listeners } = makeApi();
+    const log = makeLog();
+    await launch(
+      {
+        platform: 'StreamSensors',
+        streams: [1, 5, 3600].map((checkInterval) => ({
+          name: `Camera ${checkInterval}`,
+          url: 'rtsp://x',
+          checkInterval,
+          sensors: [{ categories: ['animals'] }],
+        })),
+      } as unknown as PlatformConfig,
+      api,
+      log,
+      listeners,
+    );
+
+    expect(workerInstances.map((worker) => worker.checkIntervalMs)).toEqual([
+      1_000, 5_000, 3_600_000,
+    ]);
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  it.each([0, -1, 0.5, 1.5, 3601, NaN, Infinity, '1', true])(
+    'warns and uses two seconds for invalid checkInterval %s',
+    async (checkInterval) => {
+      const { api, listeners } = makeApi();
+      const log = makeLog();
+      await launch(
+        {
+          platform: 'StreamSensors',
+          streams: [
+            {
+              name: 'Garden',
+              url: 'rtsp://x',
+              checkInterval,
+              sensors: [{ categories: ['animals'] }],
+            },
+          ],
+        } as unknown as PlatformConfig,
+        api,
+        log,
+        listeners,
+      );
+
+      expect(workerInstances[0].checkIntervalMs).toBe(2_000);
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('checkInterval'));
+    },
+  );
 
   it('skips a stream with no name and does not start a worker for it', async () => {
     const { api, registered, listeners } = makeApi();

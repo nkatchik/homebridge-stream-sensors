@@ -48,6 +48,7 @@ Add a `StreamSensors` platform to your Homebridge config. Each **stream** is one
         {
           "name": "Front Door",
           "url": "rtsp://user:password@192.168.1.50:8554/stream",
+          "checkInterval": 2,
           "sensors": [
             { "categories": ["people", "packages"] },
             { "categories": ["vehicles"], "threshold": 0.6 }
@@ -61,6 +62,7 @@ Add a `StreamSensors` platform to your Homebridge config. Each **stream** is one
 
 - **`name`** — used as a prefix for auto-named sensors (e.g. `Front Door People & Packages Sensor`).
 - **`url`** — any ffmpeg-readable stream URL (RTSP is typical).
+- **`checkInterval`** *(optional, per stream)* — whole seconds between detection checks, from 1–3600 (default `2`). Set to `1` for more frequent checks. All sensors on the stream share this interval; shorter intervals use more CPU. If inference takes longer, the next check starts when it finishes. Sensors clear on the next check without a matching detection.
 - **`categories`** — one or more of `animals`, `packages`, `people`, `vehicles`. The sensor triggers on any of them.
 - **`threshold`** *(optional)* — detection confidence from 0–1 (default `0.5`). Lower is more sensitive.
 
@@ -124,7 +126,7 @@ There is **no build for 32-bit ARM (armv7/armhf)** — including the legacy 32-b
 - **Stream won't open / "no frames"** — verify the URL works in another player. For RTSP cameras the plugin uses TCP transport, which is the most compatible.
 - **ffmpeg can't decode the stream** — check the URL, credentials, and that the camera is reachable from the Homebridge host (use an IP address if a hostname won't resolve).
 - **Too many false triggers** — raise the sensor's `threshold`.
-- **Detections are missed** — lower the `threshold`, or make sure the subject is large enough in frame.
+- **Detections are missed** — try a shorter stream `checkInterval`, lower the sensor's `threshold`, or make sure the subject is large enough in frame.
 - **Homebridge feels sluggish** — detection is CPU-intensive. Try [running this plugin as a child bridge](https://github.com/homebridge/homebridge/wiki/Child-Bridges) to isolate it in its own process, and/or reduce the number of streams.
 
 ## License

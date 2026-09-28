@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StreamWorker } from '../src/stream.js';
 import type { SensorSpec, Detection } from '../src/types.js';
 
@@ -48,6 +48,92 @@ const noDetections = (): Promise<Detection[]> => Promise.resolve([]);
 beforeEach(() => {
   pumpInstances.length = 0;
   vi.clearAllMocks();
+});
+
+describe('check interval', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it.each([undefined, 1_000, 5_000])(
+    'spaces checks by %s ms, including inference time (default 2000)',
+    async (interval) => {
+      const infer = vi.fn(
+        () => new Promise<Detection[]>((resolve) => setTimeout(() => resolve([]), 200)),
+      );
+      const worker = new StreamWorker(
+        URL,
+        'Garden',
+        sensors,
+        () => {},
+        () => {},
+        infer,
+        fakeLog,
+        interval,
+      );
+      pumpInstances[0].takeFrame.mockReturnValue(Buffer.alloc(1));
+      worker.start();
+      try {
+        expect(infer).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync((interval ?? 2_000) - 1);
+        expect(infer).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(infer).toHaveBeenCalledTimes(2);
+      } finally {
+        worker.stop();
+        await vi.advanceTimersByTimeAsync(200);
+        await worker.waitForStop();
+      }
+    },
+  );
+
+  it('waits for slow inference before starting the next check', async () => {
+    const infer = vi.fn(
+      () => new Promise<Detection[]>((resolve) => setTimeout(() => resolve([]), 1_500)),
+    );
+    const worker = new StreamWorker(
+      URL,
+      'Garden',
+      sensors,
+      () => {},
+      () => {},
+      infer,
+      fakeLog,
+      1_000,
+    );
+    pumpInstances[0].takeFrame.mockReturnValue(Buffer.alloc(1));
+    worker.start();
+    try {
+      await vi.advanceTimersByTimeAsync(1_499);
+      expect(infer).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(infer).toHaveBeenCalledTimes(2);
+    } finally {
+      worker.stop();
+      await vi.advanceTimersByTimeAsync(1_500);
+      await worker.waitForStop();
+    }
+  });
+
+  it('interrupts a long configured interval immediately on shutdown', async () => {
+    const infer = vi.fn(noDetections);
+    const worker = new StreamWorker(
+      URL,
+      'Garden',
+      sensors,
+      () => {},
+      () => {},
+      infer,
+      fakeLog,
+      3_600_000,
+    );
+    pumpInstances[0].takeFrame.mockReturnValue(Buffer.alloc(1));
+    worker.start();
+    await vi.advanceTimersByTimeAsync(0);
+    worker.stop();
+    await worker.waitForStop();
+    expect(infer).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
 
 describe('StreamWorker.stop()', () => {

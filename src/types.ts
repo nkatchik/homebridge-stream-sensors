@@ -22,6 +22,7 @@ export interface RawSensor {
 export interface StreamConfig {
   name: string;
   url: string;
+  checkInterval?: number; // seconds between detection checks on this stream
   sensors: RawSensor[];
 }
 

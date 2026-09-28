@@ -23,6 +23,7 @@ export class StreamWorker {
     onHealth: StreamHealthCallback,
     private readonly infer: InferFn,
     private readonly log: Logger,
+    private readonly checkIntervalMs = SAMPLE_MS,
   ) {
     this.pump = new FfmpegPump(url, name, log, onHealth);
   }
@@ -63,7 +64,7 @@ export class StreamWorker {
       }
 
       const elapsed = Date.now() - t0;
-      if (elapsed < SAMPLE_MS) await this.sleep(SAMPLE_MS - elapsed);
+      if (elapsed < this.checkIntervalMs) await this.sleep(this.checkIntervalMs - elapsed);
     }
   }
 
@@ -95,8 +96,8 @@ export class StreamWorker {
 
     // Level-triggered: each sample reports the sensor's current state directly —
     // detected this frame, or not. No cooldown or auto-off; the next sample
-    // (every SAMPLE_MS) clears it once the subject leaves. The accessory dedupes
-    // unchanged values, so this is a no-op when nothing changed.
+    // (at the configured interval) clears it once the subject leaves. The
+    // accessory dedupes unchanged values, so this is a no-op when nothing changed.
     this.sensors.forEach((sensor, i) => {
       const detected = sensor.categories.some((c) => (scores.get(c) ?? 0) >= sensor.threshold);
       this.onSensorState(i, detected);
